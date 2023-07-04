@@ -1,62 +1,59 @@
 from telebot.async_telebot import AsyncTeleBot
-from telebot.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
+import wikipedia, re
+import os
 
-bot = AsyncTeleBot('6286035570:AAGUyK_aRQaZdERTc3ZDYB5fqY-mcH6UWQM')
+from dotenv import load_dotenv, find_dotenv
 
-def generate_reply_keyboard(list_buttons, row):
-    markup = ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True)
-    markup.add(*list_buttons, row_width=row)
-    return markup
+load_dotenv(find_dotenv())
+TOKEN = os.getenv('TOKEN')
+bot = AsyncTeleBot(TOKEN, parse_mode='HTML')
+
+# Устанавливаем русский язык в Wikipedia
+wikipedia.set_lang("ru")
+# Чистим текст статьи в Wikipedia и ограничиваем его тысячей символов
+def getwiki(s):
+    try:
+        ny = wikipedia.page(s)
+        # Получаем первую тысячу символов
+        wikitext=ny.content[:4000]
+        # Разделяем по точкам
+        wikimas=wikitext.split('.')
+        # Отбрасываем всЕ после последней точки
+        wikimas = wikimas[:-1]
+        # Создаем пустую переменную для текста
+        wikitext2 = ''
+        # Проходимся по строкам, где нет знаков «равно» (то есть все, кроме заголовков)
+        for x in wikimas:
+            if not('==' in x):
+                    # Если в строке осталось больше трех символов, добавляем ее к нашей переменной и возвращаем утерянные при разделении строк точки на место
+                if(len((x.strip()))>3):
+                   wikitext2=wikitext2+x+'.'
+            else:
+                break
+        # Теперь при помощи регулярных выражений убираем разметку
+        wikitext2=re.sub('\([^()]*\)', '', wikitext2)
+        wikitext2=re.sub('\([^()]*\)', '', wikitext2)
+        wikitext2=re.sub('\{[^\{\}]*\}', '', wikitext2)
+        # Возвращаем текстовую строку
+        return wikitext2
+    # Обрабатываем исключение, которое мог вернуть модуль wikipedia при запросе
+    except Exception as e:
+        return 'В энциклопедии нет информации об этом'
+#Функция, обрабатывающая команду /start
+@bot.message_handler(commands=["start"])
+async def start(m, res=False):
+    await bot.send_message(m.chat.id, 'Отправьте мне любое слово, и я найду его значение на Wikipedia')
+#Получение сообщений от юзера
+@bot.message_handler(content_types=["text"])
+async def handle_text(message):
+    await bot.send_message(message.chat.id, getwiki(message.text))
+#Запускаем бота
 
 
-def create_keyboard_markup(button_dict):
-    markup = InlineKeyboardMarkup()
-    for button_text, callback_data in button_dict.items():
-        button = InlineKeyboardButton(button_text, callback_data=callback_data)
-        markup.add(button)
-
-    return markup
-
-@bot.message_handler(commands=['help', 'start'])
-async def send_welcome(message):
-    chat_id = message.from_user.id
-    button_dict = {'Первая кнопка': 'first',
-                   'Вторая кнопка': 'second',
-                   'Третья кнопка' : 'three'
-                   }
-    await bot.send_message(chat_id, 'Первый вариант кнопок', reply_markup=create_keyboard_markup(button_dict))
-
-
-@bot.callback_query_handler(func=lambda call: True)
-async def handle_callback(call):
-    chat_id = call.message.chat.id
-    button_call = call.data
-    if button_call == 'first':
-        await bot.send_message(chat_id, 'Вы нажали кнопку 1')
-    elif button_call == 'second':
-        await bot.send_message(chat_id, 'Вы нажали кнопку 2')
-    elif button_call == 'three':
-        await bot.send_message(chat_id, 'Вы нажали кнопку 3')
-
-
-
-
-@bot.message_handler(func=lambda message: True)
-async def echo_message(message):
-    text_message = message.text
-    text_message = text_message.lower()
-    if 'дела' in text_message  or 'настроение' in text_message:
-        await bot.reply_to(message, 'Хорошо, а у тебя?')
-    elif 'шутка' in text_message or 'анекдот' in text_message:
-        await bot.reply_to(message, 'Колобок повесился')
-    else:
-        await bot.reply_to(message, 'Извините я вас не понял?')
+async def main():
+    await bot.polling()
 
 import asyncio
-asyncio.run(bot.polling())
+asyncio.run(main())
 
 
-session = {
-    'first_name': 'Иванов Иван',
-    'old':16
-}
